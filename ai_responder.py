@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def generate_response(message: str, department: str) -> str:
     model = ChatOpenAI(
         model="gpt-4.1-mini",
@@ -14,10 +15,13 @@ def generate_response(message: str, department: str) -> str:
             "system",
             f"You are a professional customer service assistant "
             f"working in the {department} department. "
-            "Respond politely and concisely to the customer. "
-            "Do not claim to have issued refunds, accessed accounts, "
-            "or completed actions you cannot verify. "
-            "If needed, explain that a representative will review the request."
+            "Respond politely and concisely. "
+            "Do not invent business hours, policies, or account information. "
+            "Do not claim to have issued refunds, forwarded requests, "
+            "contacted employees, or completed any action. "
+            "You can explain that a human representative can review "
+            "the customer's request. "
+            "Never promise a response time unless one is provided."
         ),
         ("human", message)
     ])

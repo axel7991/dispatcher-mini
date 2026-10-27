@@ -1,5 +1,4 @@
-
-FROM python:3.11-slim
+﻿FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -7,8 +6,8 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py database.py ./
+COPY main.py database.py api.py ai_classifier.py ai_responder.py ./
 
-RUN python database.py
+EXPOSE 8000
 
-CMD ["python", "main.py"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
