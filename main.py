@@ -1,12 +1,15 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
 from database import save_request, create_tables
+from ai_classifier import classify_message
+from ai_responder import generate_response
 
 # 1. Define the information shared between nodes
 class DispatcherState(TypedDict):
     message: str
     intent: str
     department: str
+    response: str
 
 
 # 2. Create our first node
@@ -15,14 +18,11 @@ def intake_agent(state: DispatcherState):
     return state
 
 def classify_agent(state: DispatcherState):
-    message = state["message"].lower()
+    message = state["message"]
 
-    if "invoice" in message or "refund" in message:
-        intent = "billing"
-    else:
-        intent = "general"
+    intent = classify_message(message)
 
-    print("Detected intent:", intent)
+    print("AI detected intent:", intent)
 
     return {"intent": intent}
 
@@ -40,11 +40,29 @@ def routing_agent(state: DispatcherState):
 
 def billing_agent(state: DispatcherState):
     print("Billing Agent is handling the request")
-    return {"department": "Billing"}
+
+    response = generate_response(
+        message=state["message"],
+        department="Billing"
+    )
+
+    return {
+        "department": "Billing",
+        "response": response
+    }
 
 def customer_service_agent(state: DispatcherState):
     print("Customer Service Agent is handling the request")
-    return {"department": "Customer Service"}
+
+    response = generate_response(
+        message=state["message"],
+        department="Customer Service"
+    )
+
+    return {
+        "department": "Customer Service",
+        "response": response
+    }
 
 def choose_agent(state: DispatcherState):
     if state["intent"] == "billing":
@@ -79,20 +97,19 @@ builder.add_edge("customer_service", END)
 graph = builder.compile()
 
 
-create_tables()
+if __name__ == "__main__":
+    create_tables()
 
+    result = graph.invoke({
+        "message": "What are your opening hours?"
+    })
 
-# 5. Run the graph
-result = graph.invoke({
-    "message": "What are your opening hours?"
-})
+    print("Final result:", result)
 
-print("Final result:", result)
+    save_request(
+        result["message"],
+        result["intent"],
+        result["department"]
+    )
 
-save_request(
-    result["message"],
-    result["intent"],
-    result["department"]
-)
-
-print("Request saved to SQLite!")
+    print("Request saved to SQLite!")
