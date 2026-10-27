@@ -1,7 +1,9 @@
 import sqlite3
+import os
 
 def get_connection():
-    connection = sqlite3.connect("dispatcher.db")
+    database_path = os.getenv("DATABASE_PATH", "dispatcher.db")
+    connection = sqlite3.connect(database_path)
     return connection
 
 def create_tables():

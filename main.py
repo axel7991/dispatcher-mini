@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
-from database import save_request
+from database import save_request, create_tables
 
 # 1. Define the information shared between nodes
 class DispatcherState(TypedDict):
@@ -77,6 +77,9 @@ builder.add_edge("customer_service", END)
 
 # 4. Compile the graph
 graph = builder.compile()
+
+
+create_tables()
 
 
 # 5. Run the graph
