@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
-
+from database import save_request
 
 # 1. Define the information shared between nodes
 class DispatcherState(TypedDict):
@@ -85,3 +85,11 @@ result = graph.invoke({
 })
 
 print("Final result:", result)
+
+save_request(
+    result["message"],
+    result["intent"],
+    result["department"]
+)
+
+print("Request saved to SQLite!")
