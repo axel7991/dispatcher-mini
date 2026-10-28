@@ -4,7 +4,7 @@
 
 Dispatcher Mini is a small customer-service dispatcher built with **FastAPI**, **LangGraph**, **LangChain**, **OpenAI GPT-4.1 mini**, and **SQLite**. It accepts a customer message, classifies its intent, selects a department, generates a professional draft response, and stores basic request metadata.
 
-Developed as a portfolio project for **3SAI Solutions Inc.**
+Independently developed as a technical portfolio demonstration of AI agent orchestration, voice-enabled interfaces, and cloud-native backend engineering.
 
 ## Live API
 
@@ -291,6 +291,6 @@ Customer messages may be sent to an external AI provider for processing. Review 
 
 ## Maintainer
 
-**3SAI Solutions Inc.** — Portfolio project
+**Axel Tankam** - Independent developer
 
 Repository: https://github.com/axel7991/dispatcher-mini
