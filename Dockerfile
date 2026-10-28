@@ -1,4 +1,5 @@
-﻿FROM python:3.11-slim
+
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -7,6 +8,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py database.py api.py ai_classifier.py ai_responder.py ./
+
+# Include the browser-based voice demo.
+COPY demo.html ./
 
 EXPOSE 8000
 
