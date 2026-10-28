@@ -1,0 +1,298 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dispatcher Mini | AI Voice Demo</title>
+  <style>
+    :root {
+      font-family: Inter, Arial, sans-serif;
+      color: #eaf1ff;
+      background: #0b1220;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(100%, 720px);
+      background: #151f32;
+      border: 1px solid #2c3b54;
+      border-radius: 22px;
+      padding: 30px;
+      box-shadow: 0 20px 60px #0005;
+    }
+
+    h1 { margin: 0 0 8px; font-size: 28px; }
+
+    .subtitle { color: #aebdd4; line-height: 1.6; }
+
+    .status {
+      display: inline-block;
+      padding: 8px 14px;
+      background: #24334a;
+      border-radius: 20px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 14px 20px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    #talkBtn { background: #49b9ff; color: #081322; }
+    #sendBtn { background: #86efac; color: #082012; }
+    #stopBtn { background: #fda4af; color: #2a0b13; }
+
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      resize: vertical;
+      background: #0b1526;
+      color: #fff;
+      border: 1px solid #354866;
+      border-radius: 12px;
+      padding: 14px;
+      font: inherit;
+    }
+
+    .panel {
+      margin-top: 18px;
+      padding: 18px;
+      background: #0d182a;
+      border-radius: 14px;
+      border: 1px solid #263650;
+    }
+
+    .label {
+      color: #94a9c6;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .value {
+      margin-top: 8px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .metadata {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .metadata strong { color: #86efac; }
+
+    footer {
+      margin-top: 22px;
+      color: #8295b1;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🎙️ Dispatcher Mini</h1>
+    <p class="subtitle">
+      AI-powered voice dispatcher using FastAPI,
+      LangGraph and specialized customer service agents.
+    </p>
+
+    <div class="status" id="status" role="status">
+      Ready to listen
+    </div>
+
+    <div class="controls">
+      <button id="talkBtn">🎤 Start Speaking</button>
+      <button id="sendBtn">Send Message</button>
+      <button id="stopBtn">🔇 Stop Voice</button>
+    </div>
+
+    <label for="message" class="label">Your message</label>
+    <textarea
+      id="message"
+      placeholder="Speak or type your customer service question..."
+    ></textarea>
+
+    <section class="panel">
+      <div class="label">AI response</div>
+      <div class="value" id="answer" aria-live="polite">
+        Your AI assistant's response will appear here.
+      </div>
+
+      <div class="metadata">
+        <div>
+          <div class="label">Intent</div>
+          <strong id="intent">—</strong>
+        </div>
+        <div>
+          <div class="label">Department</div>
+          <strong id="department">—</strong>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Demo uses browser speech recognition and speech synthesis.
+      Chrome or Edge recommended. Microphone permission required.
+    </footer>
+  </main>
+
+  <script>
+    const talkBtn = document.getElementById("talkBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const message = document.getElementById("message");
+    const answer = document.getElementById("answer");
+    const intent = document.getElementById("intent");
+    const department = document.getElementById("department");
+    const status = document.getElementById("status");
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    let recognition = null;
+    let busy = false;
+
+    function setStatus(text) {
+      status.textContent = text;
+    }
+
+    function speak(text) {
+      if (!("speechSynthesis" in window)) {
+        setStatus("Voice playback unavailable");
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 1;
+
+      utterance.onstart = () => setStatus("Speaking response");
+      utterance.onend = () => setStatus("Ready to listen");
+      utterance.onerror = () => setStatus("Voice playback failed");
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    async function sendMessage() {
+      const text = message.value.trim();
+
+      if (!text || busy) return;
+
+      busy = true;
+      sendBtn.disabled = true;
+      talkBtn.disabled = true;
+
+      window.speechSynthesis?.cancel();
+
+      setStatus("AI is processing...");
+      answer.textContent = "Processing your request...";
+      intent.textContent = "—";
+      department.textContent = "—";
+
+      try {
+        const response = await fetch("/dispatch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ message: text })
+        });
+
+        if (!response.ok) {
+          throw new Error("Server returned HTTP " + response.status);
+        }
+
+        const data = await response.json();
+
+        answer.textContent =
+          data.response || "No response was returned.";
+
+        intent.textContent = data.intent || "Unknown";
+        department.textContent = data.department || "Unknown";
+
+        speak(data.response || "Your request has been processed.");
+
+      } catch (error) {
+        answer.textContent = "Request failed: " + error.message;
+        setStatus("Connection error");
+      } finally {
+        busy = false;
+        sendBtn.disabled = false;
+        talkBtn.disabled = !SpeechRecognition;
+      }
+    }
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setStatus("Listening...");
+        talkBtn.disabled = true;
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        message.value = transcript;
+        setStatus("Speech recognized");
+        sendMessage();
+      };
+
+      recognition.onerror = (event) => {
+        setStatus("Microphone error: " + event.error);
+      };
+
+      recognition.onend = () => {
+        if (!busy) talkBtn.disabled = false;
+      };
+
+      talkBtn.addEventListener("click", () => {
+        window.speechSynthesis?.cancel();
+        recognition.start();
+      });
+
+    } else {
+      talkBtn.disabled = true;
+      setStatus("Speech recognition unavailable; use text input");
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+
+    stopBtn.addEventListener("click", () => {
+      recognition?.stop();
+      window.speechSynthesis?.cancel();
+      setStatus("Voice stopped");
+    });
+  </script>
+</body>
+</html>
