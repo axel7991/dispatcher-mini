@@ -34,6 +34,7 @@ class CustomerRequest(BaseModel):
 # =====================================================
 
 def twiml_response(voice_response):
+    """Return TwiML XML to Twilio."""
     return Response(
         content=str(voice_response),
         media_type="application/xml"
@@ -42,17 +43,19 @@ def twiml_response(voice_response):
 
 async def verify_twilio_request(request: Request):
     """
-    Validate incoming Twilio webhooks for GET and POST.
+    Validate Twilio webhook signatures for GET and POST.
 
-    Twilio signs requests using the public URL and,
-    for form-encoded POST requests, the form parameters.
-
-    Never expose TWILIO_AUTH_TOKEN in responses or logs.
+    Diagnostic messages identify authentication failures
+    without logging secrets, signatures, or customer data.
     """
 
     auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 
     if not auth_token:
+        print(
+            "TWILIO_DIAGNOSTIC: auth_token_not_configured",
+            flush=True
+        )
         raise HTTPException(
             status_code=503,
             detail="Twilio webhook authentication is not configured"
@@ -61,6 +64,10 @@ async def verify_twilio_request(request: Request):
     public_base_url = os.getenv("PUBLIC_BASE_URL")
 
     if not public_base_url:
+        print(
+            "TWILIO_DIAGNOSTIC: public_base_url_not_configured",
+            flush=True
+        )
         raise HTTPException(
             status_code=503,
             detail="Public webhook URL is not configured"
@@ -78,6 +85,10 @@ async def verify_twilio_request(request: Request):
     )
 
     if not signature:
+        print(
+            "TWILIO_DIAGNOSTIC: missing_signature",
+            flush=True
+        )
         raise HTTPException(
             status_code=403,
             detail="Missing Twilio signature"
@@ -85,9 +96,8 @@ async def verify_twilio_request(request: Request):
 
     validator = RequestValidator(auth_token)
 
-    # GET requests have no POST form parameters.
-    # Query parameters are already included in validation_url.
     if request.method == "GET":
+        # Query parameters are included in validation_url.
         parameters = {}
 
     elif request.method == "POST":
@@ -96,6 +106,10 @@ async def verify_twilio_request(request: Request):
         ).lower()
 
         if "application/x-www-form-urlencoded" not in content_type:
+            print(
+                "TWILIO_DIAGNOSTIC: unsupported_content_type",
+                flush=True
+            )
             raise HTTPException(
                 status_code=415,
                 detail="Unsupported webhook content type"
@@ -115,10 +129,19 @@ async def verify_twilio_request(request: Request):
         parameters,
         signature
     ):
+        print(
+            "TWILIO_DIAGNOSTIC: invalid_signature",
+            flush=True
+        )
         raise HTTPException(
             status_code=403,
             detail="Invalid Twilio signature"
         )
+
+    print(
+        "TWILIO_DIAGNOSTIC: signature_valid",
+        flush=True
+    )
 
     return parameters
 
@@ -243,7 +266,12 @@ async def process_voice(request: Request):
         response.hangup()
 
     except Exception:
-        # Do not expose internal errors to callers.
+        # Avoid exposing internal errors to callers.
+        print(
+            "TWILIO_DIAGNOSTIC: agent_processing_failed",
+            flush=True
+        )
+
         response.say(
             "Sorry, our automated assistant is temporarily "
             "unavailable. Please try again later."
