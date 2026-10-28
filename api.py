@@ -1,7 +1,7 @@
 
 import os
 
-from fastapi import FastAPI, Form, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -42,9 +42,14 @@ def twiml_response(voice_response):
 
 async def verify_twilio_request(request: Request):
     """
-    Validate incoming Twilio webhooks using the auth token.
-    Requires TWILIO_AUTH_TOKEN in the environment.
+    Validate incoming Twilio webhooks for GET and POST.
+
+    Twilio signs requests using the public URL and,
+    for form-encoded POST requests, the form parameters.
+
+    Never expose TWILIO_AUTH_TOKEN in responses or logs.
     """
+
     auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 
     if not auth_token:
@@ -53,26 +58,61 @@ async def verify_twilio_request(request: Request):
             detail="Twilio webhook authentication is not configured"
         )
 
-    form = await request.form()
+    public_base_url = os.getenv("PUBLIC_BASE_URL")
 
-    # Our public HTTPS address is used by Twilio.
-    public_base_url = os.getenv(
-        "PUBLIC_BASE_URL",
-        "https://dispatcher.webwatchhq.com"
-    ).rstrip("/")
+    if not public_base_url:
+        raise HTTPException(
+            status_code=503,
+            detail="Public webhook URL is not configured"
+        )
+
+    public_base_url = public_base_url.rstrip("/")
 
     validation_url = public_base_url + request.url.path
 
     if request.url.query:
         validation_url += "?" + request.url.query
 
-    signature = request.headers.get("X-Twilio-Signature", "")
+    signature = request.headers.get(
+        "X-Twilio-Signature", ""
+    )
+
+    if not signature:
+        raise HTTPException(
+            status_code=403,
+            detail="Missing Twilio signature"
+        )
 
     validator = RequestValidator(auth_token)
 
+    # GET requests have no POST form parameters.
+    # Query parameters are already included in validation_url.
+    if request.method == "GET":
+        parameters = {}
+
+    elif request.method == "POST":
+        content_type = request.headers.get(
+            "content-type", ""
+        ).lower()
+
+        if "application/x-www-form-urlencoded" not in content_type:
+            raise HTTPException(
+                status_code=415,
+                detail="Unsupported webhook content type"
+            )
+
+        form = await request.form()
+        parameters = dict(form)
+
+    else:
+        raise HTTPException(
+            status_code=405,
+            detail="Method not allowed"
+        )
+
     if not validator.validate(
         validation_url,
-        dict(form),
+        parameters,
         signature
     ):
         raise HTTPException(
@@ -80,7 +120,7 @@ async def verify_twilio_request(request: Request):
             detail="Invalid Twilio signature"
         )
 
-    return form
+    return parameters
 
 
 # =====================================================
@@ -89,7 +129,9 @@ async def verify_twilio_request(request: Request):
 
 @app.get("/")
 def home():
-    return {"message": "Dispatcher Mini is running!"}
+    return {
+        "message": "Dispatcher Mini is running!"
+    }
 
 
 # =====================================================
@@ -122,7 +164,7 @@ def dispatch(request: CustomerRequest):
 # TWILIO VOICE — INCOMING CALL
 # =====================================================
 
-@app.post("/voice")
+@app.api_route("/voice", methods=["GET", "POST"])
 async def voice(request: Request):
 
     await verify_twilio_request(request)
@@ -161,7 +203,9 @@ async def process_voice(request: Request):
 
     form = await verify_twilio_request(request)
 
-    speech_result = str(form.get("SpeechResult", "")).strip()
+    speech_result = str(
+        form.get("SpeechResult", "")
+    ).strip()
 
     response = VoiceResponse()
 
@@ -171,6 +215,7 @@ async def process_voice(request: Request):
             "Please call again."
         )
         response.hangup()
+
         return twiml_response(response)
 
     try:
@@ -189,14 +234,16 @@ async def process_voice(request: Request):
             "Your request has been received."
         )
 
-        response.say(ai_response)
+        response.say(str(ai_response))
+
         response.say(
             "Thank you for calling Dispatcher Mini. Goodbye."
         )
+
         response.hangup()
 
     except Exception:
-        # Avoid exposing internal errors to callers.
+        # Do not expose internal errors to callers.
         response.say(
             "Sorry, our automated assistant is temporarily "
             "unavailable. Please try again later."
