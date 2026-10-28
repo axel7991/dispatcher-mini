@@ -1,6 +1,7 @@
 
 import os
 
+from fastapi.responses import FileResponse
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -155,6 +156,17 @@ def home():
     return {
         "message": "Dispatcher Mini is running!"
     }
+
+# =====================================================
+# BROWSER VOICE DEMO
+# =====================================================
+
+@app.get("/demo", include_in_schema=False)
+def browser_voice_demo():
+    return FileResponse(
+        "/app/demo.html",
+        media_type="text/html"
+    )
 
 
 # =====================================================
